@@ -48,6 +48,21 @@
             android:textSize="14sp"
             tools:text="saman.perera@email.com" />
 
+        <TextView
+            android:id="@+id/tv_manage_accounts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:drawableEnd="@drawable/ic_arrow_forward"
+            android:drawablePadding="8dp"
+            android:focusable="true"
+            android:padding="8dp"
+            android:text="Manage Accounts"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp" />
+
         <!-- Security Section -->
         <TextView
             android:layout_width="wrap_content"
