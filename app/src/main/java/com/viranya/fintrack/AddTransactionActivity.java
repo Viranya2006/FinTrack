@@ -17,40 +17,48 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.viranya.fintrack.model.Transaction;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 /**
  * This Activity handles both creating a new transaction and editing an existing one.
- * It determines its mode (add or edit) based on the Intent extras it receives.
  */
 public class AddTransactionActivity extends AppCompatActivity {
 
-    // --- UI Elements ---
+    // --- UI & Data Declarations ---
     private MaterialButtonToggleGroup toggleButtonGroup;
     private TextInputEditText etAmount, etDate, etDescription;
-    private AutoCompleteTextView actCategory;
+    private AutoCompleteTextView actCategory, actAccount;
     private Button btnCancel, btnSave;
     private TextView tvTitle;
 
-    // --- Services ---
     private FirebaseFirestore db;
     private FirebaseAuth mAuth;
-
-    // --- Data & State ---
-    private String transactionType = "Expense"; // Default to expense
+    private String transactionType = "Expense";
     private final Calendar selectedDate = Calendar.getInstance();
+
+    // --- Dynamic Data for Dropdowns ---
+    private final List<String> accountNames = new ArrayList<>();
+    private ArrayAdapter<String> accountAdapter;
+    private ArrayAdapter<String> categoryAdapter;
+    private final String[] expenseCategories = new String[]{"Food", "Transport", "Housing", "Utilities", "Entertainment", "Shopping", "Health", "Savings"};
+    private final String[] incomeCategories = new String[]{"Salary", "Freelance", "Gift", "Other"};
 
     // --- Edit Mode Variables ---
     private boolean isEditMode = false;
     private Transaction existingTransaction;
     private double originalAmount = 0;
     private String originalCategory = "";
+    private String originalAccount = "";
     private String originalType = "";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,18 +67,15 @@ public class AddTransactionActivity extends AppCompatActivity {
 
         initializeServices();
         bindViews();
-        setupCategoryDropdown();
+        fetchAccounts();
 
-        // --- Check if we are in Edit Mode ---
-        // The app enters Edit Mode if a "EDIT_TRANSACTION" extra is passed in the Intent.
         if (getIntent().hasExtra("EDIT_TRANSACTION")) {
             isEditMode = true;
             existingTransaction = (Transaction) getIntent().getSerializableExtra("EDIT_TRANSACTION");
             populateFieldsForEdit();
         } else {
-            // New transaction mode: set the title and default date
-            tvTitle.setText("Add Transaction");
             updateDateInView();
+            updateCategoryAdapter();
         }
 
         setupListeners();
@@ -87,22 +92,50 @@ public class AddTransactionActivity extends AppCompatActivity {
         etDate = findViewById(R.id.et_date);
         etDescription = findViewById(R.id.et_description);
         actCategory = findViewById(R.id.act_category);
+        actAccount = findViewById(R.id.act_account);
         btnCancel = findViewById(R.id.btn_cancel);
         btnSave = findViewById(R.id.btn_save);
         tvTitle = findViewById(R.id.tv_activity_title);
     }
 
-    /**
-     * If in edit mode, this method pre-fills all form fields with the existing transaction's data.
-     */
+    private void fetchAccounts() {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) return;
+
+        accountAdapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, accountNames);
+        actAccount.setAdapter(accountAdapter);
+
+        db.collection("users").document(currentUser.getUid()).collection("accounts")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    accountNames.clear();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        accountNames.add(doc.getId());
+                    }
+                    accountAdapter.notifyDataSetChanged();
+                });
+    }
+
+    private void updateCategoryAdapter() {
+        if ("Income".equals(transactionType)) {
+            categoryAdapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, incomeCategories);
+        } else {
+            categoryAdapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, expenseCategories);
+        }
+        actCategory.setAdapter(categoryAdapter);
+    }
+
     private void populateFieldsForEdit() {
         tvTitle.setText("Edit Transaction");
         etDescription.setText(existingTransaction.getTitle());
         etAmount.setText(String.valueOf(existingTransaction.getAmount()));
-        // The 'false' argument prevents the dropdown from showing when we set the text
-        actCategory.setText(existingTransaction.getCategory(), false);
+        actAccount.setText(existingTransaction.getAccountName(), false);
 
         transactionType = existingTransaction.getType();
+        updateCategoryAdapter();
+        actCategory.setText(existingTransaction.getCategory(), false);
+
+
         if ("Income".equals(transactionType)) {
             toggleButtonGroup.check(R.id.btn_income);
         } else {
@@ -112,9 +145,9 @@ public class AddTransactionActivity extends AppCompatActivity {
         selectedDate.setTime(existingTransaction.getDate());
         updateDateInView();
 
-        // Store the original values. This is crucial for correctly calculating budget changes.
         originalAmount = existingTransaction.getAmount();
         originalCategory = existingTransaction.getCategory();
+        originalAccount = existingTransaction.getAccountName();
         originalType = existingTransaction.getType();
     }
 
@@ -126,6 +159,8 @@ public class AddTransactionActivity extends AppCompatActivity {
                 } else if (checkedId == R.id.btn_expense) {
                     transactionType = "Expense";
                 }
+                actCategory.setText("", false);
+                updateCategoryAdapter();
             }
         });
 
@@ -134,57 +169,41 @@ public class AddTransactionActivity extends AppCompatActivity {
         btnCancel.setOnClickListener(v -> finish());
     }
 
-    /**
-     * Handles the logic for both saving a new transaction and updating an existing one.
-     */
     private void saveTransaction() {
-        // --- 1. Get and Validate User Input ---
         String title = etDescription.getText().toString().trim();
         String amountStr = etAmount.getText().toString().trim();
         String category = actCategory.getText().toString().trim();
+        String accountName = actAccount.getText().toString().trim();
         Date date = selectedDate.getTime();
         FirebaseUser currentUser = mAuth.getCurrentUser();
 
-        if (currentUser == null) {
-            Toast.makeText(this, "You must be logged in.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (TextUtils.isEmpty(title)) {
-            etDescription.setError("Description cannot be empty.");
-            return;
-        }
-        if (TextUtils.isEmpty(amountStr) || Double.parseDouble(amountStr) <= 0) {
-            etAmount.setError("Amount must be greater than zero.");
-            return;
-        }
-        if (TextUtils.isEmpty(category)) {
-            actCategory.setError("Category is required.");
-            return;
-        }
+        if (currentUser == null) { Toast.makeText(this, "Authentication error.", Toast.LENGTH_SHORT).show(); return; }
+        if (TextUtils.isEmpty(title)) { etDescription.setError("Description is required."); return; }
+        if (TextUtils.isEmpty(amountStr) || Double.parseDouble(amountStr) <= 0) { etAmount.setError("Amount must be greater than zero."); return; }
+        if (TextUtils.isEmpty(accountName)) { actAccount.setError("Account is required."); return; }
+        if (TextUtils.isEmpty(category)) { actCategory.setError("Category is required."); return; }
 
         double amount = Double.parseDouble(amountStr);
-        Transaction transaction = new Transaction(title, category, amount, transactionType, date);
         String userId = currentUser.getUid();
 
-        // --- 2. Determine whether to Add or Update ---
+        Transaction transaction = new Transaction(title, category, amount, transactionType, accountName, date);
+
         if (isEditMode) {
-            // UPDATE EXISTING TRANSACTION: Overwrite the document with the new data.
             db.collection("users").document(userId).collection("transactions").document(existingTransaction.getDocumentId())
                     .set(transaction)
                     .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(this, "Transaction updated!", Toast.LENGTH_SHORT).show();
-                        // Handle the complex logic of updating budgets
+                        Toast.makeText(this, "Transaction updated successfully!", Toast.LENGTH_SHORT).show();
+                        updateAccountBalanceOnEdit(userId, amount);
                         updateBudgetOnEdit(userId, category, amount);
                         finish();
                     })
                     .addOnFailureListener(e -> Toast.makeText(this, "Failed to update transaction.", Toast.LENGTH_SHORT).show());
         } else {
-            // ADD NEW TRANSACTION: Create a new document in the collection.
             db.collection("users").document(userId).collection("transactions")
                     .add(transaction)
                     .addOnSuccessListener(documentReference -> {
-                        Toast.makeText(this, "Transaction saved!", Toast.LENGTH_SHORT).show();
-                        // If it's an expense, update the budget
+                        Toast.makeText(this, "Transaction saved successfully!", Toast.LENGTH_SHORT).show();
+                        updateAccountBalance(userId, accountName, amount, transactionType);
                         if ("Expense".equals(transactionType)) {
                             updateBudgetOnAdd(userId, category, amount);
                         }
@@ -194,74 +213,68 @@ public class AddTransactionActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Updates the budget when a new expense is added.
-     */
-    private void updateBudgetOnAdd(String userId, String category, double amount) {
-        db.collection("users").document(userId).collection("budgets").document(category)
-                .update("spentAmount", FieldValue.increment(amount));
+    private void updateAccountBalance(String userId, String accountName, double amount, String type) {
+        double amountToUpdate = "Income".equals(type) ? amount : -amount;
+        db.collection("users").document(userId).collection("accounts").document(accountName)
+                .update("balance", FieldValue.increment(amountToUpdate));
     }
 
-    /**
-     * Handles the complex logic of updating budgets when an existing expense is edited.
-     */
+    private void updateAccountBalanceOnEdit(String userId, double newAmount) {
+        double newAmountToUpdate = "Income".equals(transactionType) ? newAmount : -newAmount;
+        double oldAmountToRevert = "Income".equals(originalType) ? -originalAmount : originalAmount;
+        String newAccount = actAccount.getText().toString();
+
+        if (originalAccount.equals(newAccount)) {
+            double totalChange = oldAmountToRevert + newAmountToUpdate;
+            db.collection("users").document(userId).collection("accounts").document(originalAccount)
+                    .update("balance", FieldValue.increment(totalChange));
+        } else {
+            db.collection("users").document(userId).collection("accounts").document(originalAccount)
+                    .update("balance", FieldValue.increment(oldAmountToRevert));
+            db.collection("users").document(userId).collection("accounts").document(newAccount)
+                    .update("balance", FieldValue.increment(newAmountToUpdate));
+        }
+    }
+
+    private void updateBudgetOnAdd(String userId, String category, double amount) {
+        if ("Expense".equals(transactionType)) {
+            db.collection("users").document(userId).collection("budgets").document(category)
+                    .update("spentAmount", FieldValue.increment(amount));
+        }
+    }
+
     private void updateBudgetOnEdit(String userId, String newCategory, double newAmount) {
-        // --- Calculate the difference between the old and new expense values ---
-        double difference = 0;
-        // Case 1: Was an expense, still an expense.
-        if ("Expense".equals(originalType) && "Expense".equals(transactionType)) {
-            // If the category is the same, the difference is simply new amount - old amount.
-            if (originalCategory.equals(newCategory)) {
-                difference = newAmount - originalAmount;
+        if (!"Expense".equals(transactionType) && !"Expense".equals(originalType)) return;
+
+        if (originalCategory.equals(newCategory)) {
+            if ("Expense".equals(originalType)) {
+                double difference = newAmount - originalAmount;
                 db.collection("users").document(userId).collection("budgets").document(newCategory)
                         .update("spentAmount", FieldValue.increment(difference));
-            } else {
-                // If the category changed, we must subtract from the old and add to the new.
-                // Subtract from the original category's budget
-                if (!originalCategory.isEmpty()) {
-                    db.collection("users").document(userId).collection("budgets").document(originalCategory)
-                            .update("spentAmount", FieldValue.increment(-originalAmount));
-                }
-                // Add to the new category's budget
-                db.collection("users").document(userId).collection("budgets").document(newCategory)
-                        .update("spentAmount", FieldValue.increment(newAmount));
             }
-            // Case 2: Was an income, now an expense.
-        } else if (!"Expense".equals(originalType) && "Expense".equals(transactionType)) {
-            // We just need to add the new expense amount to the new category.
-            updateBudgetOnAdd(userId, newCategory, newAmount);
-            // Case 3: Was an expense, now an income.
-        } else if ("Expense".equals(originalType) && !"Expense".equals(transactionType)) {
-            // We need to subtract the original expense amount from the original category.
-            if (!originalCategory.isEmpty()) {
+        } else {
+            if (!originalCategory.isEmpty() && "Expense".equals(originalType)) {
                 db.collection("users").document(userId).collection("budgets").document(originalCategory)
                         .update("spentAmount", FieldValue.increment(-originalAmount));
             }
+            if ("Expense".equals(transactionType)) {
+                db.collection("users").document(userId).collection("budgets").document(newCategory)
+                        .update("spentAmount", FieldValue.increment(newAmount));
+            }
         }
-        // Case 4: Was income, still income. No budget change needed.
-    }
-
-    // --- UI Helper Methods ---
-
-    private void setupCategoryDropdown() {
-        String[] categories = new String[]{"Food", "Transport", "Housing", "Utilities", "Entertainment", "Shopping", "Health", "Salary", "Freelance", "Savings"};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, categories);
-        actCategory.setAdapter(adapter);
     }
 
     private void showDatePickerDialog() {
         DatePickerDialog datePickerDialog = new DatePickerDialog(
-                this,
-                (view, year, month, dayOfMonth) -> {
-                    selectedDate.set(Calendar.YEAR, year);
-                    selectedDate.set(Calendar.MONTH, month);
-                    selectedDate.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-                    updateDateInView();
-                },
+                this, (view, year, month, dayOfMonth) -> {
+            selectedDate.set(Calendar.YEAR, year);
+            selectedDate.set(Calendar.MONTH, month);
+            selectedDate.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+            updateDateInView();
+        },
                 selectedDate.get(Calendar.YEAR),
                 selectedDate.get(Calendar.MONTH),
-                selectedDate.get(Calendar.DAY_OF_MONTH)
-        );
+                selectedDate.get(Calendar.DAY_OF_MONTH));
         datePickerDialog.show();
     }
 

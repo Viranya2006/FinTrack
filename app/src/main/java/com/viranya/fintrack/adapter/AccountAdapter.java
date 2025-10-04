@@ -18,12 +18,20 @@ import java.util.Locale;
 
 public class AccountAdapter extends RecyclerView.Adapter<AccountAdapter.AccountViewHolder> {
 
+    //  an interface for click events
+    public interface OnAccountListener {
+        void onAccountLongClick(Account account);
+    }
+
     private final List<Account> accountList;
     private final Context context;
+    private final OnAccountListener onAccountListener; // Listener instance
 
-    public AccountAdapter(List<Account> accountList, Context context) {
+    //   the constructor
+    public AccountAdapter(List<Account> accountList, Context context, OnAccountListener onAccountListener) {
         this.accountList = accountList;
         this.context = context;
+        this.onAccountListener = onAccountListener;
     }
 
     @NonNull
@@ -37,9 +45,17 @@ public class AccountAdapter extends RecyclerView.Adapter<AccountAdapter.AccountV
     public void onBindViewHolder(@NonNull AccountViewHolder holder, int position) {
         Account account = accountList.get(position);
         holder.accountName.setText(account.getName());
-
         NumberFormat format = NumberFormat.getCurrencyInstance(new Locale("si", "LK"));
         holder.accountBalance.setText(format.format(account.getBalance()));
+
+        //  Set the long-click listener on the item view
+        holder.itemView.setOnLongClickListener(v -> {
+            if (onAccountListener != null) {
+                onAccountListener.onAccountLongClick(account);
+                return true;
+            }
+            return false;
+        });
     }
 
     @Override

@@ -1,10 +1,15 @@
 package com.viranya.fintrack.model;
 
-public class Account {
+import com.google.firebase.firestore.Exclude;
+
+import java.io.Serializable;
+
+public class Account implements Serializable {
+    @Exclude
+    private String documentId; // To hold the document ID from Firestore
     private String name;
     private double balance;
 
-    // Required empty constructor for Firestore
     public Account() {}
 
     public Account(String name, double balance) {
@@ -13,6 +18,9 @@ public class Account {
     }
 
     // --- Getters and Setters ---
+    public String getDocumentId() { return documentId; }
+    public void setDocumentId(String documentId) { this.documentId = documentId; }
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 

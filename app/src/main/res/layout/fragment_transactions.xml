@@ -16,17 +16,25 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Transactions"
             android:fontFamily="@font/poppins"
+            android:text="Transactions"
             android:textColor="@color/text_primary"
             android:textSize="28sp"
             android:textStyle="bold" />
+
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/search_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:queryHint="Search by title..."
+            app:iconifiedByDefault="false"/>
 
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:background="@android:color/transparent"
             app:tabIndicatorColor="@color/teal_green"
             app:tabSelectedTextColor="@color/teal_green"
@@ -46,7 +54,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Expense" />
-
         </com.google.android.material.tabs.TabLayout>
     </LinearLayout>
 
@@ -62,7 +69,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
-        android:text="No transactions yet.\nTap the '+' button to add one!"
+        android:text="No transactions found."
         android:textAlignment="center"
         android:textColor="@color/text_secondary"
         android:textSize="16sp"
@@ -79,6 +86,5 @@
         app:backgroundTint="@color/vibrant_coral"
         app:tint="@color/surface"
         android:contentDescription="Add Transaction" />
-
 
 </RelativeLayout>

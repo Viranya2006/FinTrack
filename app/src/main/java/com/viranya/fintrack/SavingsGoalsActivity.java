@@ -153,15 +153,14 @@ public class SavingsGoalsActivity extends AppCompatActivity implements SavingGoa
         if (currentUser == null) return;
         String userId = currentUser.getUid();
 
-        // --- Step 1: Update the saved amount in the saving_goals collection ---
-        // We use FieldValue.increment() for safe, atomic updates.
+        // 1. Update the savedAmount in the saving_goals collection
         db.collection("users").document(userId).collection("saving_goals").document(goal.getGoalName())
                 .update("savedAmount", FieldValue.increment(amount));
 
-        // --- Step 2: Create a corresponding expense transaction for record keeping ---
+        // 2. Create a corresponding expense transaction
         String title = "Contribution to " + goal.getGoalName();
-        // This transaction is categorized as "Savings" to keep the user's budget accurate.
-        Transaction transaction = new Transaction(title, "Savings", amount, "Expense", new Date());
+        // CORRECTED LINE: Added "Default Account" as the 5th argument
+        Transaction transaction = new Transaction(title, "Savings", amount, "Expense", "Default Account", new Date());
 
         db.collection("users").document(userId).collection("transactions")
                 .add(transaction)

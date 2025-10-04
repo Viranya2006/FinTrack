@@ -11,11 +11,13 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.tabs.TabLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FieldValue;
@@ -29,20 +31,24 @@ import com.viranya.fintrack.model.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-// Implement the adapter's listener interface
 public class TransactionsFragment extends Fragment implements TransactionAdapter.OnTransactionListener {
 
     // --- UI Elements ---
     private RecyclerView recyclerView;
     private FloatingActionButton fab;
     private TextView emptyTextView;
+    private TabLayout tabLayout;
+    private SearchView searchView;
 
     // --- Firebase & Adapter ---
     private TransactionAdapter adapter;
-    private List<Transaction> transactionList;
+    private List<Transaction> allTransactionsList;
+    private List<Transaction> filteredTransactionList;
     private FirebaseFirestore db;
     private FirebaseAuth mAuth;
+    private String currentFilter = "All";
 
     @Nullable
     @Override
@@ -55,57 +61,99 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
         recyclerView = view.findViewById(R.id.rv_transactions);
         fab = view.findViewById(R.id.fab_add_transaction);
         emptyTextView = view.findViewById(R.id.tv_empty_transactions);
+        tabLayout = view.findViewById(R.id.tab_layout);
+        searchView = view.findViewById(R.id.search_view);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        transactionList = new ArrayList<>();
-        // Initialize the adapter, passing 'this' as the listener
-        adapter = new TransactionAdapter(transactionList, getContext(), this);
+        allTransactionsList = new ArrayList<>();
+        filteredTransactionList = new ArrayList<>();
+        adapter = new TransactionAdapter(filteredTransactionList, getContext(), this);
         recyclerView.setAdapter(adapter);
 
-        fab.setOnClickListener(v -> {
-            Intent intent = new Intent(getActivity(), AddTransactionActivity.class);
-            startActivity(intent);
-        });
+        fab.setOnClickListener(v -> startActivity(new Intent(getActivity(), AddTransactionActivity.class)));
+        setupTabListener();
+        setupSearchListener();
 
         fetchTransactions();
 
         return view;
     }
 
-    /**
-     * Fetches transactions from Firestore and listens for real-time updates.
-     */
+    private void setupTabListener() {
+        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                currentFilter = tab.getText().toString();
+                applyFilters();
+            }
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {}
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {}
+        });
+    }
+
+    private void setupSearchListener() {
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                return false;
+            }
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                applyFilters();
+                return true;
+            }
+        });
+    }
+
     private void fetchTransactions() {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
-        String userId = currentUser.getUid();
 
-        db.collection("users").document(userId).collection("transactions")
+        db.collection("users").document(currentUser.getUid()).collection("transactions")
                 .orderBy("date", Query.Direction.DESCENDING)
-                .addSnapshotListener((queryDocumentSnapshots, e) -> {
+                .addSnapshotListener((value, e) -> {
                     if (e != null) {
                         Toast.makeText(getContext(), "Error fetching transactions.", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    if (queryDocumentSnapshots == null) return;
+                    if (value == null) return;
 
-                    transactionList.clear();
-                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                    allTransactionsList.clear();
+                    for (QueryDocumentSnapshot doc : value) {
                         Transaction transaction = doc.toObject(Transaction.class);
-                        // Get the document ID from Firestore and set it in our model
                         transaction.setDocumentId(doc.getId());
-                        transactionList.add(transaction);
+                        allTransactionsList.add(transaction);
                     }
-                    adapter.notifyDataSetChanged();
-                    checkIfEmpty();
+                    applyFilters();
                 });
     }
 
-    /**
-     * Checks if the transaction list is empty and updates the UI accordingly.
-     */
+    private void applyFilters() {
+        List<Transaction> tempFilteredList = new ArrayList<>(allTransactionsList);
+
+        if (!"All".equals(currentFilter)) {
+            tempFilteredList = tempFilteredList.stream()
+                    .filter(t -> t.getType().equals(currentFilter))
+                    .collect(Collectors.toList());
+        }
+
+        String searchQuery = searchView.getQuery().toString().toLowerCase().trim();
+        if (!searchQuery.isEmpty()) {
+            tempFilteredList = tempFilteredList.stream()
+                    .filter(t -> t.getTitle().toLowerCase().contains(searchQuery))
+                    .collect(Collectors.toList());
+        }
+
+        filteredTransactionList.clear();
+        filteredTransactionList.addAll(tempFilteredList);
+        adapter.notifyDataSetChanged();
+        checkIfEmpty();
+    }
+
     private void checkIfEmpty() {
-        if (transactionList.isEmpty()) {
+        if (filteredTransactionList.isEmpty()) {
             recyclerView.setVisibility(View.GONE);
             emptyTextView.setVisibility(View.VISIBLE);
         } else {
@@ -113,26 +161,15 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
             emptyTextView.setVisibility(View.GONE);
         }
     }
-    /**
-     * This method is called from the adapter when an item is normal-clicked.
-     * @param transaction The transaction that was normal-clicked.
-     */    @Override
+
+    @Override
     public void onTransactionClick(Transaction transaction) {
-        // When a transaction is clicked, open the AddTransactionActivity
         Intent intent = new Intent(getActivity(), AddTransactionActivity.class);
-        // Pass the selected transaction object to the activity
         intent.putExtra("EDIT_TRANSACTION", transaction);
         startActivity(intent);
     }
-
-
-    /**
-     * This method is called from the adapter when an item is long-clicked.
-     * @param transaction The transaction that was long-clicked.
-     */
     @Override
     public void onTransactionLongClick(Transaction transaction) {
-        // Show a confirmation dialog to prevent accidental deletion
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete Transaction")
                 .setMessage("Are you sure you want to delete this transaction?")
@@ -141,44 +178,28 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
                 .show();
     }
 
-    /**
-     * Deletes the specified transaction from Firestore.
-     * @param transaction The transaction object to delete.
-     */
     private void deleteTransaction(Transaction transaction) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null || transaction.getDocumentId() == null) {
-            Toast.makeText(getContext(), "Error: Could not delete transaction.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String userId = currentUser.getUid();
+        if (currentUser == null || transaction.getDocumentId() == null) return;
 
-        // Use the document ID stored in the transaction object to delete it
+        String userId = currentUser.getUid(); // Get the userId here
+
         db.collection("users").document(userId).collection("transactions").document(transaction.getDocumentId())
                 .delete()
                 .addOnSuccessListener(aVoid -> {
                     Toast.makeText(getContext(), "Transaction deleted.", Toast.LENGTH_SHORT).show();
-                    // If the deleted item was an expense, we need to update the corresponding budget
                     if ("Expense".equals(transaction.getType())) {
+                        // Pass the userId to the helper method
                         updateBudgetOnDelete(userId, transaction.getCategory(), transaction.getAmount());
                     }
-                })
-                .addOnFailureListener(e -> Toast.makeText(getContext(), "Failed to delete transaction.", Toast.LENGTH_SHORT).show());
+                });
     }
 
-    /**
-     * Reverses the budget calculation after an expense is deleted.
-     * @param userId The ID of the current user.
-     * @param category The category of the deleted expense.
-     * @param expenseAmount The amount of the deleted expense.
-     */
+    // It now accepts the 'userId' as an argument.
     private void updateBudgetOnDelete(String userId, String category, double expenseAmount) {
-        // Find the budget for the category and DECREMENT the spentAmount by the expense amount
         db.collection("users").document(userId).collection("budgets").document(category)
                 .update("spentAmount", FieldValue.increment(-expenseAmount))
                 .addOnSuccessListener(aVoid -> System.out.println("Budget updated after deletion."))
                 .addOnFailureListener(e -> System.out.println("No budget to update or error: " + e.getMessage()));
     }
-
-
 }
