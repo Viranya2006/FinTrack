@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "35128717377",
+    "project_id": "fintrack-48ce6",
+    "storage_bucket": "fintrack-48ce6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:35128717377:android:ad48151793f80f0d0356c0",
+        "android_client_info": {
+          "package_name": "com.viranya.fintrack"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "35128717377-66c9io8au3p1nafpuddf43gmb4e0835k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.viranya.fintrack",
+            "certificate_hash": "5ee99249790128d51ef8448917fef3a1fe5ab07f"
+          }
+        },
+        {
+          "client_id": "35128717377-lkobhjr8deldp0oi02t7fp7bdgqk9rtv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKy2VT0IsmGAdkfcQMpCXNRY3bVwMThiQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "35128717377-lkobhjr8deldp0oi02t7fp7bdgqk9rtv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

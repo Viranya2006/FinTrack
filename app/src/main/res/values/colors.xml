@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="teal_green">#00A79D</color>
+    <color name="dark_slate_green">#2A5C58</color>
+    <color name="vibrant_coral">#FF6F61</color>
+    <color name="electric_violet">#C445C4</color>
+    <color name="background">#F8F9FA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="text_primary">#1E293B</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="border">#E2E8F0</color>
+</resources>
