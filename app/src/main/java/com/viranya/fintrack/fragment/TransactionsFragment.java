@@ -44,11 +44,11 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
 
     // --- Firebase & Adapter ---
     private TransactionAdapter adapter;
-    private List<Transaction> allTransactionsList;
-    private List<Transaction> filteredTransactionList;
+    private List<Transaction> allTransactionsList; // Holds all transactions from Firestore
+    private List<Transaction> filteredTransactionList; // Holds the list currently being displayed
     private FirebaseFirestore db;
     private FirebaseAuth mAuth;
-    private String currentFilter = "All";
+    private String currentFilter = "All"; // To keep track of the selected tab
 
     @Nullable
     @Override
@@ -64,16 +64,19 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
         tabLayout = view.findViewById(R.id.tab_layout);
         searchView = view.findViewById(R.id.search_view);
 
+        // Setup RecyclerView
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         allTransactionsList = new ArrayList<>();
         filteredTransactionList = new ArrayList<>();
         adapter = new TransactionAdapter(filteredTransactionList, getContext(), this);
         recyclerView.setAdapter(adapter);
 
+        // Setup Listeners
         fab.setOnClickListener(v -> startActivity(new Intent(getActivity(), AddTransactionActivity.class)));
         setupTabListener();
         setupSearchListener();
 
+        // Fetch initial data
         fetchTransactions();
 
         return view;
@@ -83,6 +86,7 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
+                // When a tab is selected, update the filter and apply it
                 currentFilter = tab.getText().toString();
                 applyFilters();
             }
@@ -99,14 +103,19 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
             public boolean onQueryTextSubmit(String query) {
                 return false;
             }
+
             @Override
             public boolean onQueryTextChange(String newText) {
+                // When the search text changes, apply all filters again
                 applyFilters();
                 return true;
             }
         });
     }
 
+    /**
+     * Fetches ALL transactions from Firestore and stores them in `allTransactionsList`.
+     */
     private void fetchTransactions() {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
@@ -126,29 +135,48 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
                         transaction.setDocumentId(doc.getId());
                         allTransactionsList.add(transaction);
                     }
+                    // After fetching, apply the current filters
                     applyFilters();
                 });
     }
 
+    /**
+     * A central method to apply both the tab filter and the search filter.
+     */
     private void applyFilters() {
+        // Start with a fresh copy of all transactions
         List<Transaction> tempFilteredList = new ArrayList<>(allTransactionsList);
 
+        // 1. Apply the Tab Filter (All, Income, Expense)
         if (!"All".equals(currentFilter)) {
-            tempFilteredList = tempFilteredList.stream()
-                    .filter(t -> t.getType().equals(currentFilter))
-                    .collect(Collectors.toList());
+            // This is the corrected logic to filter the list based on the selected tab
+            ArrayList<Transaction> filteredByType = new ArrayList<>();
+            for (Transaction t : tempFilteredList) {
+                if (t.getType().equals(currentFilter)) {
+                    filteredByType.add(t);
+                }
+            }
+            tempFilteredList = filteredByType;
         }
 
+        // 2. Apply the Search Filter
         String searchQuery = searchView.getQuery().toString().toLowerCase().trim();
         if (!searchQuery.isEmpty()) {
-            tempFilteredList = tempFilteredList.stream()
-                    .filter(t -> t.getTitle().toLowerCase().contains(searchQuery))
-                    .collect(Collectors.toList());
+            ArrayList<Transaction> searchedList = new ArrayList<>();
+            for (Transaction t : tempFilteredList) {
+                if (t.getTitle().toLowerCase().contains(searchQuery)) {
+                    searchedList.add(t);
+                }
+            }
+            tempFilteredList = searchedList;
         }
 
+        // Update the list that the adapter uses
         filteredTransactionList.clear();
         filteredTransactionList.addAll(tempFilteredList);
         adapter.notifyDataSetChanged();
+
+        // Show or hide the "empty" message
         checkIfEmpty();
     }
 
@@ -162,6 +190,7 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
         }
     }
 
+    // --- Edit and Delete Logic (remains the same) ---
     @Override
     public void onTransactionClick(Transaction transaction) {
         Intent intent = new Intent(getActivity(), AddTransactionActivity.class);
@@ -181,25 +210,19 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
     private void deleteTransaction(Transaction transaction) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null || transaction.getDocumentId() == null) return;
-
-        String userId = currentUser.getUid(); // Get the userId here
+        String userId = currentUser.getUid();
 
         db.collection("users").document(userId).collection("transactions").document(transaction.getDocumentId())
                 .delete()
                 .addOnSuccessListener(aVoid -> {
                     Toast.makeText(getContext(), "Transaction deleted.", Toast.LENGTH_SHORT).show();
                     if ("Expense".equals(transaction.getType())) {
-                        // Pass the userId to the helper method
                         updateBudgetOnDelete(userId, transaction.getCategory(), transaction.getAmount());
                     }
                 });
     }
-
-    // It now accepts the 'userId' as an argument.
     private void updateBudgetOnDelete(String userId, String category, double expenseAmount) {
         db.collection("users").document(userId).collection("budgets").document(category)
-                .update("spentAmount", FieldValue.increment(-expenseAmount))
-                .addOnSuccessListener(aVoid -> System.out.println("Budget updated after deletion."))
-                .addOnFailureListener(e -> System.out.println("No budget to update or error: " + e.getMessage()));
+                .update("spentAmount", FieldValue.increment(-expenseAmount));
     }
 }
