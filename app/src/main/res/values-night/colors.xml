@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="teal_green">#00D4C2</color>
+    <color name="dark_slate_green">#00A79D</color>
+    <color name="vibrant_coral">#FF8F81</color>
+    <color name="electric_violet">#E175E1</color>
+
+    <color name="background">#1C1C1E</color>
+    <color name="surface">#2C2C2E</color>
+    <color name="text_primary">#F2F2F7</color>
+    <color name="text_secondary">#AEAEB2</color>
+    <color name="border">#48484A</color>
+</resources>
