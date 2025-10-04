@@ -113,6 +113,18 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
             emptyTextView.setVisibility(View.GONE);
         }
     }
+    /**
+     * This method is called from the adapter when an item is normal-clicked.
+     * @param transaction The transaction that was normal-clicked.
+     */    @Override
+    public void onTransactionClick(Transaction transaction) {
+        // When a transaction is clicked, open the AddTransactionActivity
+        Intent intent = new Intent(getActivity(), AddTransactionActivity.class);
+        // Pass the selected transaction object to the activity
+        intent.putExtra("EDIT_TRANSACTION", transaction);
+        startActivity(intent);
+    }
+
 
     /**
      * This method is called from the adapter when an item is long-clicked.
@@ -167,4 +179,6 @@ public class TransactionsFragment extends Fragment implements TransactionAdapter
                 .addOnSuccessListener(aVoid -> System.out.println("Budget updated after deletion."))
                 .addOnFailureListener(e -> System.out.println("No budget to update or error: " + e.getMessage()));
     }
+
+
 }

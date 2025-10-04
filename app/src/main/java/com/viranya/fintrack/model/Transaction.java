@@ -4,7 +4,7 @@ import com.google.firebase.firestore.Exclude;
 import com.google.firebase.firestore.ServerTimestamp;
 import java.util.Date;
 
-public class Transaction {
+public class Transaction implements java.io.Serializable {
 
     @Exclude // This prevents the document ID from being saved back into the document itself
     private String documentId;

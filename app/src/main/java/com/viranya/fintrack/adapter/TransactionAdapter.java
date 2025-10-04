@@ -18,8 +18,8 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
 
     // --- Interface to handle click events on items ---
     public interface OnTransactionListener {
-        void onTransactionLongClick(Transaction transaction);
-        // We can add onTransactionClick for editing later
+        void onTransactionClick(Transaction transaction); // For editing
+        void onTransactionLongClick(Transaction transaction); // For deleting
     }
 
     private final List<Transaction> transactionList;
@@ -67,6 +67,13 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
             holder.amount.setText("+ " + formattedAmount);
             holder.amount.setTextColor(ContextCompat.getColor(context, R.color.teal_green));
         }
+        // --- Set the regular click listener for editing---
+
+        holder.itemView.setOnClickListener(v -> {
+            if (onTransactionListener != null) {
+                onTransactionListener.onTransactionClick(transaction);
+            }
+        });
 
         // --- Set the long-click listener for deletion ---
         holder.itemView.setOnLongClickListener(v -> {
