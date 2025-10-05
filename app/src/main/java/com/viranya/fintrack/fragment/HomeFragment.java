@@ -63,8 +63,7 @@ public class HomeFragment extends Fragment {
     private TransactionAdapter recentTransactionsAdapter;
     private final List<Transaction> recentTransactionList = new ArrayList<>();
 
-    // --- Data Holders for Calculation ---
-    // We use AtomicReference to safely share values between the asynchronous listeners.
+    // --- Data Holders for Asynchronous Calculation ---
     private final AtomicReference<Double> totalAccountBalance = new AtomicReference<>(0.0);
     private final AtomicReference<Double> currentMonthIncome = new AtomicReference<>(0.0);
     private final AtomicReference<Double> currentMonthExpense = new AtomicReference<>(0.0);
@@ -96,6 +95,7 @@ public class HomeFragment extends Fragment {
 
         fetchDashboardData();
     }
+
     private void setupRecentTransactionsList() {
         rvRecentTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         recentTransactionsAdapter = new TransactionAdapter(recentTransactionList, getContext(), null);
@@ -143,7 +143,11 @@ public class HomeFragment extends Fragment {
                     for (QueryDocumentSnapshot doc : value) {
                         Transaction transaction = doc.toObject(Transaction.class);
                         if ("Income".equals(transaction.getType())) {
-                            monthlyIncome += transaction.getAmount();
+                            // --- THIS IS THE FIX ---
+                            // We only add to monthly income if the category is NOT "Initial Balance".
+                            if (!"Initial Balance".equals(transaction.getCategory())) {
+                                monthlyIncome += transaction.getAmount();
+                            }
                         } else {
                             monthlyExpense += transaction.getAmount();
                             String category = transaction.getCategory();
@@ -155,7 +159,6 @@ public class HomeFragment extends Fragment {
                     tvMonthlyIncome.setText(format.format(monthlyIncome));
                     tvMonthlyExpense.setText(format.format(monthlyExpense));
 
-                    // Store monthly values for the total balance calculation
                     currentMonthIncome.set(monthlyIncome);
                     currentMonthExpense.set(monthlyExpense);
                     updateTotalBalance();
@@ -164,31 +167,34 @@ public class HomeFragment extends Fragment {
                     setupBarChart(monthlyIncome, monthlyExpense);
                 });
 
-        // Listener 3: Get the 5 most recent transactions
+        // --- Listener 3: Fetches the 5 most recent transactions for the list. ---
         db.collection("users").document(userId).collection("transactions")
                 .orderBy("date", Query.Direction.DESCENDING)
                 .limit(5)
                 .addSnapshotListener((value, error) -> {
-                    if (getContext() == null || error != null) return;
+                    if (getContext() == null || error != null) return; // Safety check
                     recentTransactionList.clear();
                     for (QueryDocumentSnapshot doc : value) {
                         recentTransactionList.add(doc.toObject(Transaction.class));
                     }
+                    // Notify the adapter that the recent transactions list has changed.
                     recentTransactionsAdapter.notifyDataSetChanged();
                 });
     }
 
     /**
-     * A helper method to calculate and display the final total balance based on your new formula.
+     * Helper method to calculate and display the final total balance.
      */
     private void updateTotalBalance() {
-        // --- THIS IS THE CORRECTED LOGIC ---
-        // Final Total = (Sum of All Account Balances) + (This Month's Income) - (This Month's Expense)
-        double finalTotal = totalAccountBalance.get() + currentMonthIncome.get() - currentMonthExpense.get();
+        // Final Total = (Sum of All Account Balances) - (This Month's Expense)
+        double finalTotal = totalAccountBalance.get() - currentMonthExpense.get();
         NumberFormat format = NumberFormat.getCurrencyInstance(new Locale("si", "LK"));
         tvTotalBalance.setText(format.format(finalTotal));
     }
-    // --- Chart Setup Methods
+
+
+    // --- Chart Setup Methods ---
+
     private void setupPieChart(Map<String, Double> expenseData) {
         if (getContext() == null || expenseData == null || expenseData.isEmpty()) {
             pieChart.clear();
@@ -203,7 +209,7 @@ public class HomeFragment extends Fragment {
         PieDataSet dataSet = new PieDataSet(entries, "Expense Distribution");
         dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
         dataSet.setValueTextColor(Color.BLACK);
-        dataSet.setValueTextSize(12f);
+        dataSet.setValueTextSize(0f);
         PieData pieData = new PieData(dataSet);
         pieChart.setData(pieData);
         pieChart.getDescription().setEnabled(false);
@@ -238,4 +244,3 @@ public class HomeFragment extends Fragment {
         barChart.invalidate();
     }
 }
-
