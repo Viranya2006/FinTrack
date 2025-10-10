@@ -3,7 +3,6 @@ package com.viranya.fintrack;
 import android.app.DatePickerDialog;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;

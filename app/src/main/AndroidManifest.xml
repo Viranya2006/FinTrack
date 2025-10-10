@@ -15,6 +15,9 @@
         android:theme="@style/Theme.FinTrack"
         tools:targetApi="31">
         <activity
+            android:name=".YearlyReportActivity"
+            android:exported="false" />
+        <activity
             android:name=".CategoriesActivity"
             android:exported="false" />
         <activity

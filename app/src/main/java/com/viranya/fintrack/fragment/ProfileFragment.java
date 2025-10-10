@@ -32,6 +32,7 @@ import com.viranya.fintrack.AccountsActivity;
 import com.viranya.fintrack.CategoriesActivity;
 import com.viranya.fintrack.ChangePasswordActivity;
 import com.viranya.fintrack.R;
+import com.viranya.fintrack.YearlyReportActivity;
 import com.viranya.fintrack.auth.LoginActivity;
 import com.viranya.fintrack.model.Transaction;
 
@@ -52,7 +53,7 @@ public class ProfileFragment extends Fragment {
     public static final String IS_APP_LOCK_ENABLED = "isAppLockEnabled";
 
     // --- UI Elements ---
-    private TextView tvUserName, tvUserEmail, tvChangePassword, tvExportData, tvDeleteAccount, tvManageAccounts, tvManageCategories;
+    private TextView tvUserName, tvUserEmail, tvChangePassword, tvExportData, tvDeleteAccount, tvManageAccounts, tvManageCategories,tvYearlyReport;
     private SwitchMaterial switchAppLock;
     private Button btnLogout;
 
@@ -105,6 +106,7 @@ public class ProfileFragment extends Fragment {
         tvDeleteAccount = view.findViewById(R.id.tv_delete_account);
         tvManageAccounts = view.findViewById(R.id.tv_manage_accounts);
         tvManageCategories = view.findViewById(R.id.tv_manage_categories);
+        tvYearlyReport = view.findViewById(R.id.tv_yearly_report);
     }
 
     private void loadData() {
@@ -150,6 +152,9 @@ public class ProfileFragment extends Fragment {
                 saveAppLockPreference(false);
                 Toast.makeText(getContext(), "App Lock Disabled", Toast.LENGTH_SHORT).show();
             }
+        });
+        tvYearlyReport.setOnClickListener(v -> {
+            startActivity(new Intent(requireActivity(), YearlyReportActivity.class));
         });
     }
 

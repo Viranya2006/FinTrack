@@ -118,6 +118,20 @@
             android:text="DATA MANAGEMENT"
             android:textColor="@color/text_secondary"
             android:textStyle="bold" />
+        <TextView
+            android:id="@+id/tv_yearly_report"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:drawableEnd="@drawable/ic_arrow_forward"
+            android:drawablePadding="8dp"
+            android:focusable="true"
+            android:padding="8dp"
+            android:text="View Yearly Report"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/tv_export_data"
