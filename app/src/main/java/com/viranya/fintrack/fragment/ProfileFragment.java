@@ -1,14 +1,12 @@
 package com.viranya.fintrack.fragment;
 
-import android.Manifest;
+import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
+import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,7 +19,6 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.material.switchmaterial.SwitchMaterial;
@@ -38,8 +35,6 @@ import com.viranya.fintrack.R;
 import com.viranya.fintrack.auth.LoginActivity;
 import com.viranya.fintrack.model.Transaction;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -49,7 +44,6 @@ import java.util.Locale;
 
 /**
  * The ProfileFragment displays all user settings and account management options.
- * It is the central hub for logging out, managing security, and handling data.
  */
 public class ProfileFragment extends Fragment {
 
@@ -67,7 +61,7 @@ public class ProfileFragment extends Fragment {
     private FirebaseFirestore db;
     private SharedPreferences sharedPreferences;
 
-    // --- ActivityResultLauncher for Export Data (Modern Android Storage) ---
+    // --- ActivityResultLauncher for Export Data ---
     private final ActivityResultLauncher<String> createFileLauncher =
             registerForActivityResult(new ActivityResultContracts.CreateDocument("text/csv"), uri -> {
                 if (uri != null) {
@@ -80,7 +74,6 @@ public class ProfileFragment extends Fragment {
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        // Inflate the XML layout for this fragment
         return inflater.inflate(R.layout.fragment_profile, container, false);
     }
 
@@ -88,14 +81,13 @@ public class ProfileFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // This structured approach ensures all components are initialized in the correct order.
         initializeServices();
         bindViews(view);
         loadData();
         setupListeners();
     }
 
-    // --- Initialization Methods for Clarity ---
+    // --- Initialization Methods ---
 
     private void initializeServices() {
         mAuth = FirebaseAuth.getInstance();
@@ -116,20 +108,16 @@ public class ProfileFragment extends Fragment {
     }
 
     private void loadData() {
-        // Load user name and email from Firebase
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser != null) {
             tvUserEmail.setText(currentUser.getEmail());
             db.collection("users").document(currentUser.getUid()).get()
                     .addOnSuccessListener(documentSnapshot -> {
-                        // Safety check: ensure fragment is still active before updating UI
                         if (isAdded() && documentSnapshot.exists() && documentSnapshot.getString("name") != null) {
                             tvUserName.setText(documentSnapshot.getString("name"));
                         }
                     });
         }
-
-        // Load the saved state of the app lock switch from the device's storage
         boolean isAppLockEnabled = sharedPreferences.getBoolean(IS_APP_LOCK_ENABLED, false);
         switchAppLock.setChecked(isAppLockEnabled);
     }
@@ -142,26 +130,43 @@ public class ProfileFragment extends Fragment {
         tvExportData.setOnClickListener(v -> handleExportClick());
         tvDeleteAccount.setOnClickListener(v -> showDeleteConfirmationDialog());
 
+        // Listener for the App Lock switch with a security check
         switchAppLock.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            sharedPreferences.edit().putBoolean(IS_APP_LOCK_ENABLED, isChecked).apply();
-            Toast.makeText(getContext(), isChecked ? "App Lock Enabled" : "App Lock Disabled", Toast.LENGTH_SHORT).show();
+            if (isChecked) {
+                // If the user tries to ENABLE the lock, check if the device has a PIN/password.
+                KeyguardManager keyguardManager = (KeyguardManager) requireActivity().getSystemService(Context.KEYGUARD_SERVICE);
+                if (!keyguardManager.isDeviceSecure()) {
+                    // If no device lock is set, inform the user and send them to settings.
+                    Toast.makeText(getContext(), "Please set a device PIN or password first.", Toast.LENGTH_LONG).show();
+                    startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS));
+                    buttonView.setChecked(false); // Revert the switch to off
+                } else {
+                    // If a device lock exists, enable the feature.
+                    saveAppLockPreference(true);
+                    Toast.makeText(getContext(), "App Lock Enabled", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                // If the user tries to DISABLE the lock, just save the preference.
+                saveAppLockPreference(false);
+                Toast.makeText(getContext(), "App Lock Disabled", Toast.LENGTH_SHORT).show();
+            }
         });
+    }
+
+    /**
+     * Helper method to save the app lock preference to SharedPreferences.
+     */
+    private void saveAppLockPreference(boolean isEnabled) {
+        sharedPreferences.edit().putBoolean(IS_APP_LOCK_ENABLED, isEnabled).apply();
     }
 
     // --- Feature Implementations ---
 
-    /**
-     * Handles the click on the "Export Data" button by launching the system file picker.
-     */
     private void handleExportClick() {
         String fileName = "FinTrack_Export_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".csv";
         createFileLauncher.launch(fileName);
     }
 
-    /**
-     * Fetches all transactions and writes them to the file Uri provided by the system file picker.
-     * @param uri The Uri of the file the user chose to save.
-     */
     private void exportTransactionsToCSV(Uri uri) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
@@ -175,20 +180,17 @@ public class ProfileFragment extends Fragment {
                         return;
                     }
 
-                    // Build the CSV content as a string
                     StringBuilder csvContent = new StringBuilder("Date,Type,Category,Title,Amount\n");
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
                         Transaction transaction = doc.toObject(Transaction.class);
                         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
                         String dateStr = sdf.format(transaction.getDate());
-                        // Format the line, escaping any quotes in the title
                         csvContent.append(String.format(Locale.US, "\"%s\",\"%s\",\"%s\",\"%s\",%.2f\n",
                                 dateStr, transaction.getType(), transaction.getCategory(),
                                 transaction.getTitle().replace("\"", "\"\""),
                                 transaction.getAmount()));
                     }
 
-                    // Write the string to the file using Scoped Storage
                     try (OutputStream outputStream = requireActivity().getContentResolver().openOutputStream(uri);
                          OutputStreamWriter writer = new OutputStreamWriter(outputStream)) {
                         writer.write(csvContent.toString());
@@ -199,9 +201,6 @@ public class ProfileFragment extends Fragment {
                 });
     }
 
-    /**
-     * Shows a confirmation dialog to the user before deleting their account.
-     */
     private void showDeleteConfirmationDialog() {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete Account")
@@ -211,25 +210,18 @@ public class ProfileFragment extends Fragment {
                 .show();
     }
 
-    /**
-     * Deletes all user data from Firestore and then deletes the user's authentication account.
-     */
     private void deleteUserAccount() {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) return;
         String userId = currentUser.getUid();
 
-        // Chain the deletion of all user data collections.
         deleteCollection(db.collection("users").document(userId).collection("transactions"), () ->
                 deleteCollection(db.collection("users").document(userId).collection("budgets"), () ->
                         deleteCollection(db.collection("users").document(userId).collection("saving_goals"), () ->
                                 deleteCollection(db.collection("users").document(userId).collection("accounts"), () ->
                                         deleteCollection(db.collection("users").document(userId).collection("categories"), () -> {
 
-                                            // After all collections are deleted, delete the main user document
                                             db.collection("users").document(userId).delete().addOnSuccessListener(aVoid -> {
-
-                                                // Finally, delete the user from Firebase Authentication
                                                 currentUser.delete().addOnCompleteListener(task -> {
                                                     if (isAdded()) {
                                                         if (task.isSuccessful()) {
@@ -244,11 +236,6 @@ public class ProfileFragment extends Fragment {
                                         })))));
     }
 
-    /**
-     * A helper function to delete all documents within a Firestore collection in a batch.
-     * @param collection The collection to delete.
-     * @param onComplete A callback to run after the deletion is complete.
-     */
     private void deleteCollection(CollectionReference collection, final Runnable onComplete) {
         collection.get().addOnSuccessListener(queryDocumentSnapshots -> {
             if (queryDocumentSnapshots.isEmpty()) {
@@ -263,9 +250,6 @@ public class ProfileFragment extends Fragment {
         });
     }
 
-    /**
-     * Signs the user out of Firebase and navigates to the Login screen.
-     */
     private void logoutUser() {
         mAuth.signOut();
         if (getActivity() != null) {

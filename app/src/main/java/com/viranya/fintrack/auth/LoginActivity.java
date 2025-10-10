@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Patterns;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -22,6 +23,8 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
+import com.google.firebase.auth.FirebaseAuthInvalidUserException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -30,6 +33,7 @@ import com.viranya.fintrack.R;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -108,9 +112,20 @@ public class LoginActivity extends AppCompatActivity {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
 
-        // 1. Validate that the fields are not empty.
-        if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
-            Toast.makeText(this, "Email and password are required", Toast.LENGTH_SHORT).show();
+        // 1. Validate that the fields are not empty and email is valid.
+        if (TextUtils.isEmpty(email)) {
+            etEmail.setError("Email is required.");
+            etEmail.requestFocus();
+            return;
+        }
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            etEmail.setError("Please enter a valid email address.");
+            etEmail.requestFocus();
+            return;
+        }
+        if (TextUtils.isEmpty(password)) {
+            etPassword.setError("Password is required.");
+            etPassword.requestFocus();
             return;
         }
 
@@ -123,9 +138,19 @@ public class LoginActivity extends AppCompatActivity {
                         startActivity(new Intent(LoginActivity.this, HomeActivity.class));
                         finish();
                     } else {
-                        // If login fails, display a message to the user.
-                        Toast.makeText(LoginActivity.this, "Authentication failed.",
-                                Toast.LENGTH_SHORT).show();
+                        // If login fails, display a specific message to the user.
+                        try {
+                            throw Objects.requireNonNull(task.getException());
+                        } catch (FirebaseAuthInvalidUserException e) {
+                            etEmail.setError("User does not exist.");
+                            etEmail.requestFocus();
+                        } catch (FirebaseAuthInvalidCredentialsException e) {
+                            etPassword.setError("Incorrect password.");
+                            etPassword.requestFocus();
+                        } catch (Exception e) {
+                            Toast.makeText(LoginActivity.this, "Authentication failed: " + e.getMessage(),
+                                    Toast.LENGTH_LONG).show();
+                        }
                     }
                 });
     }
@@ -163,7 +188,7 @@ public class LoginActivity extends AppCompatActivity {
                             finish();
                         }
                     } else {
-                        Toast.makeText(this, "Firebase Authentication Failed.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Login failed Please check internet connection and try again.", Toast.LENGTH_SHORT).show();
                     }
                 });
     }

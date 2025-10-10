@@ -1,9 +1,11 @@
+// java
 package com.viranya.fintrack.auth;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Patterns;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -22,6 +24,7 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -30,6 +33,7 @@ import com.viranya.fintrack.R;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class SignUpActivity extends AppCompatActivity {
 
@@ -44,6 +48,14 @@ public class SignUpActivity extends AppCompatActivity {
     private FirebaseFirestore db;
     private GoogleSignInClient mGoogleSignInClient;
     private ActivityResultLauncher<Intent> googleSignInLauncher;
+
+    // --- Password validation ---
+    private static final Pattern PASSWORD_PATTERN =
+            Pattern.compile("^(?=.*[A-Z])(?=.*\\d).{8,}$");
+
+    private boolean isValidPassword(String password) {
+        return !TextUtils.isEmpty(password) && PASSWORD_PATTERN.matcher(password).matches();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,35 +109,66 @@ public class SignUpActivity extends AppCompatActivity {
      * Handles the email/password account creation flow.
      */
     private void createAccount() {
-        // 1. Get user input from all fields.
         String fullName = etFullName.getText().toString().trim();
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
         String confirmPassword = etConfirmPassword.getText().toString().trim();
 
-        // 2. Validate that all fields are filled.
-        if (TextUtils.isEmpty(fullName) || TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
-            Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show();
+        // Field presence checks
+        if (TextUtils.isEmpty(fullName)) {
+            etFullName.setError("Full name is required.");
+            etFullName.requestFocus();
+            return;
+        }
+        if (TextUtils.isEmpty(email)) {
+            etEmail.setError("Email is required.");
+            etEmail.requestFocus();
+            return;
+        }
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            etEmail.setError("Please enter a valid email address.");
+            etEmail.requestFocus();
+            return;
+        }
+        if (TextUtils.isEmpty(password)) {
+            etPassword.setError("Password is required.");
+            etPassword.requestFocus();
+            return;
+        }
+        if (TextUtils.isEmpty(confirmPassword)) {
+            etConfirmPassword.setError("Please confirm your password.");
+            etConfirmPassword.requestFocus();
             return;
         }
 
-        // 3. Check if the entered passwords match.
+        // Password complexity
+        if (!isValidPassword(password)) {
+            etPassword.setError("Password must be at least 8 chars, include an uppercase letter and a number.");
+            etPassword.requestFocus();
+            return;
+        }
+
+        // Match check
         if (!password.equals(confirmPassword)) {
-            Toast.makeText(this, "Passwords do not match.", Toast.LENGTH_SHORT).show();
+            etConfirmPassword.setError("Passwords do not match.");
+            etConfirmPassword.requestFocus();
             return;
         }
 
-        // 4. Use Firebase Auth to create a new user account.
+        // Create user
         mAuth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this, task -> {
                     if (task.isSuccessful()) {
-                        // 5. If the user is created successfully in Auth, save their details to Firestore.
                         FirebaseUser user = mAuth.getCurrentUser();
                         saveUserData(user, fullName, email);
                     } else {
-                        // If creation fails, show a detailed error message.
-                        Toast.makeText(SignUpActivity.this, "Authentication failed: " + task.getException().getMessage(),
-                                Toast.LENGTH_LONG).show();
+                        if (task.getException() instanceof FirebaseAuthUserCollisionException) {
+                            etEmail.setError("An account with this email already exists.");
+                            etEmail.requestFocus();
+                        } else {
+                            Toast.makeText(SignUpActivity.this,
+                                    "SignUp Failed Please try Again ", Toast.LENGTH_LONG).show();
+                        }
                     }
                 });
     }
@@ -142,13 +185,9 @@ public class SignUpActivity extends AppCompatActivity {
                         FirebaseUser user = mAuth.getCurrentUser();
                         boolean isNewUser = task.getResult().getAdditionalUserInfo().isNewUser();
                         if (isNewUser) {
-                            // Since this is the sign-up screen, a Google sign-in will always be a new user.
-                            // We save their data from their Google profile.
                             saveUserData(user, user.getDisplayName(), user.getEmail());
                         } else {
-                            // This case is unlikely on the sign-up screen, but for safety,
-                            // we navigate an existing user to the home screen.
-                            startActivity(new Intent(SignUpActivity.this, HomeActivity.class));
+                            startActivity(new Intent(SignUpActivity.this, LoginActivity.class));
                             finish();
                         }
                     } else {
@@ -181,7 +220,7 @@ public class SignUpActivity extends AppCompatActivity {
                 .set(user)
                 .addOnSuccessListener(aVoid -> {
                     Toast.makeText(SignUpActivity.this, "Account created.", Toast.LENGTH_SHORT).show();
-                    startActivity(new Intent(SignUpActivity.this, HomeActivity.class));
+                    startActivity(new Intent(SignUpActivity.this, LoginActivity.class));
                     finish();
                 })
                 .addOnFailureListener(e -> {
