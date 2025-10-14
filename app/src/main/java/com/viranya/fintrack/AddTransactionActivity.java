@@ -86,7 +86,6 @@ public class AddTransactionActivity extends AppCompatActivity {
         initializeServices();
         bindViews();
 
-        // --- Corrected Initialization Order ---
         // 1. Setup adapters with empty lists first. This prevents race conditions where the UI tries to display before data is ready.
         accountAdapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, accountNames);
         actAccount.setAdapter(accountAdapter);
